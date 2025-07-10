@@ -1,0 +1,83 @@
+version: '3.8'
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    ports:
+      - "9000:9000" # MinIO API port
+      - "9001:9001" # MinIO Console port
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 60s
+
+  minio-setup:
+    image: minio/mc:latest
+    container_name: minio-setup
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      echo 'Waiting for MinIO to be ready...';
+      sleep 10;
+      echo 'Setting up MinIO client...';
+      /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      echo 'Creating bucket...';
+      /usr/bin/mc mb myminio/mytestbucket --ignore-existing;
+      echo 'Setting bucket policy to public read...';
+      /usr/bin/mc anonymous set public myminio/mytestbucket;
+      echo 'MinIO setup completed successfully';
+      "
+    restart: "no"
+
+  filestorage-api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: filestorage-api
+    ports:
+      - "8080:8080"
+    environment:
+      S3_REGION: us-west-1
+      S3_BUCKET: mytestbucket
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_ENDPOINT: http://minio:9000
+      AWS_S3_FORCE_PATH_STYLE: "true"
+    depends_on:
+      minio:
+        condition: service_healthy
+      minio-setup:
+        condition: service_completed_successfully
+
+  filestorage-ui:
+    build: ./ui
+    container_name: filestorage-ui
+    depends_on:
+      - filestorage-api
+
+  gateway:
+    image: openresty/openresty:alpine
+    container_name: gateway
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/usr/local/openresty/nginx/conf/nginx.conf:ro
+      - ./nginx/upstreams.conf:/usr/local/openresty/nginx/conf/upstreams.conf:ro
+      - ./nginx/locations.conf:/usr/local/openresty/nginx/conf/locations.conf:ro
+    depends_on:
+      - filestorage-api
+      - filestorage-ui
+
+volumes:
+  minio_data:

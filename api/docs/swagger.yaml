@@ -1,0 +1,165 @@
+basePath: /
+definitions:
+  main.FileInfo:
+    properties:
+      filename:
+        type: string
+      path:
+        type: string
+      uploaded_at:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: A simple microservice for storing and retrieving files, with S3/MinIO
+    backend.
+  title: File Storage Service API
+  version: "1.0"
+paths:
+  /:
+    get:
+      description: Provides a welcome message for the service.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'message: Welcome to the File Storage Service. Visit /docs
+            for API documentation.'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Welcome message
+      tags:
+      - General
+  /files:
+    get:
+      description: Lists all available files in the S3 bucket. Assumes authentication/authorization
+        by gateway.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of files
+          schema:
+            items:
+              $ref: '#/definitions/main.FileInfo'
+            type: array
+        "500":
+          description: 'detail: Failed to list files from storage.'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: List all files
+      tags:
+      - Files
+    post:
+      consumes:
+      - multipart/form-data
+      description: Uploads one or more files to the service. Assumes authentication/authorization
+        by gateway.
+      parameters:
+      - description: Files to upload
+        in: formData
+        name: files
+        required: true
+        type: file
+      responses:
+        "201":
+          description: 'message: Files uploaded successfully, uploaded_files: [filename1,
+            filename2]'
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: 'detail: No files provided for upload.'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "413":
+          description: 'detail: File exceeds the maximum allowed size.'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'detail: Could not upload file.'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Upload files
+      tags:
+      - Files
+  /files/{filename}:
+    delete:
+      description: Deletes a specific file by its filename. Assumes authentication/authorization
+        by gateway.
+      parameters:
+      - description: Name of the file to delete
+        in: path
+        name: filename
+        required: true
+        type: string
+      responses:
+        "204":
+          description: No Content
+        "500":
+          description: 'detail: Could not delete file.'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete a file
+      tags:
+      - Files
+    get:
+      description: Retrieves a specific file by its filename. Assumes authentication/authorization
+        by gateway.
+      parameters:
+      - description: Name of the file to retrieve
+        in: path
+        name: filename
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: File content
+          schema:
+            type: file
+        "404":
+          description: 'detail: File not found.'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: 'detail: Failed to retrieve file.'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a file
+      tags:
+      - Files
+  /health:
+    get:
+      description: Checks the health status of the service.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'status: healthy'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - General
+swagger: "2.0"
